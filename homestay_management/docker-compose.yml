@@ -1,0 +1,152 @@
+version: '3.8'
+
+services:
+  homestay_db:
+    image: postgres:13
+    environment:
+      POSTGRES_USER: homestay_user
+      POSTGRES_PASSWORD: homestay_pass
+      POSTGRES_DB: homestay_db
+    volumes:
+      - homestay_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U homestay_user -d homestay_db"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    networks:
+      - homestay-network
+
+  room_db:
+    image: postgres:13
+    environment:
+      POSTGRES_USER: room_user
+      POSTGRES_PASSWORD: room_pass
+      POSTGRES_DB: room_db
+    volumes:
+      - room_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U room_user -d room_db"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    networks:
+      - homestay-network
+
+  booking_db:
+    image: postgres:13
+    environment:
+      POSTGRES_USER: booking_user
+      POSTGRES_PASSWORD: booking_pass
+      POSTGRES_DB: booking_db
+    volumes:
+      - booking_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U booking_user -d booking_db"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    networks:
+      - homestay-network
+
+  host_db:
+    image: postgres:13
+    environment:
+      POSTGRES_USER: host_user
+      POSTGRES_PASSWORD: host_pass
+      POSTGRES_DB: host_db
+    volumes:
+      - host_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U host_user -d host_db"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    networks:
+      - homestay-network
+
+  homestay_service:
+    build: ./homestay_service
+    ports:
+      - "5001:5000"
+    depends_on:
+      homestay_db:
+        condition: service_healthy
+    
+    environment:
+      DATABASE_URL: postgresql://host_user:host_pass@host_db:5432/host_db
+      FLASK_ENV: production
+      FLASK_DEBUG: 0
+
+    volumes:
+      - ./homestay_service:/app
+    networks:
+      - homestay-network
+
+  room_service:
+    build: ./room_service
+    ports:
+      - "5002:5000"
+    depends_on:
+      room_db:
+        condition: service_healthy
+    environment:
+      DATABASE_URL: postgresql://host_user:host_pass@host_db:5432/host_db
+      FLASK_ENV: production
+      FLASK_DEBUG: 0
+    volumes:
+      - ./room_service:/app
+    networks:
+      - homestay-network
+
+  booking_service:
+    build: ./booking_service
+    ports:
+      - "5003:5000"
+    depends_on:
+      booking_db:
+        condition: service_healthy
+      room_service:
+        condition: service_started
+    environment:
+      DATABASE_URL: postgresql://host_user:host_pass@host_db:5432/host_db
+      FLASK_ENV: production
+      FLASK_DEBUG: 0
+    volumes:
+      - ./booking_service:/app
+    networks:
+      - homestay-network
+
+  host_service:
+    build: ./host_service
+    ports:
+      - "5004:5000"
+    depends_on:
+      host_db:
+        condition: service_healthy
+      homestay_service:
+        condition: service_started
+      room_service:
+        condition: service_started
+      booking_service:
+        condition: service_started
+    environment:
+      DATABASE_URL: postgresql://host_user:host_pass@host_db:5432/host_db
+      FLASK_ENV: production
+      FLASK_DEBUG: 0
+    volumes:
+      - ./host_service:/app
+    networks:
+      - homestay-network
+
+volumes:
+  homestay_data:
+  room_data:
+  booking_data:
+  host_data:
+
+networks:
+  homestay-network:
+    name: homestay-network
+    external: true
+    driver: bridge
